@@ -1,4 +1,4 @@
-# WEB-CONVERTER — ANTIBYPASS V2 Web Interface
+# ANTIBYPASS V2 — Web Interface
 
 Versi web dari bot Discord **ANTIBYPASS V2** (powered by ANTILUA).
 Tampilan mengikuti pola aplikasi musik modern (sidebar, search, shelf, player dock),
@@ -15,7 +15,8 @@ dengan identitas sendiri: gelap, crimson → ember → gold, dan tipografi tekni
 Buka `index.html` langsung di browser, atau jalankan static server:
 
 ```bash
-cd antibypass-web
+git clone https://github.com/ANTILUA-404/WEB-CONVERTER.git
+cd WEB-CONVERTER
 python -m http.server 8777
 # http://127.0.0.1:8777
 ```
@@ -64,8 +65,10 @@ kirim kredensial role ke bundle publik seperti ini.
 ## Struktur
 
 ```
-antibypass-web/
+WEB-CONVERTER/
 ├─ index.html
+├─ README.md
+├─ LICENSE
 └─ assets/
    ├─ css/style.css        # design system + seluruh layout
    └─ js/
@@ -75,6 +78,8 @@ antibypass-web/
       ├─ app.js            # shell, router, halaman publik
       └─ admin.js          # gate + control center
 ```
+
+Live (kalau GitHub Pages diaktifkan): `https://antilua-404.github.io/WEB-CONVERTER/`
 
 State disimpan di `localStorage` key `antibypass.v2.state`. Reset lewat menu
 profil → **Reset data demo**.
