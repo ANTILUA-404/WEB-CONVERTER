@@ -1,6 +1,7 @@
 node_modules/
+server/data/
+server/.env
+server/bin/
 .DS_Store
 Thumbs.db
 *.log
-.vscode/
-.idea/

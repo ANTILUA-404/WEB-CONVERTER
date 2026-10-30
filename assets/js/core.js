@@ -414,6 +414,7 @@
 
   const state = load();
   ABP.state = state;
+  ABP.live = false;
 
   ABP.save = function () {
     try {
@@ -431,6 +432,7 @@
   };
 
   ABP.refill = function () {
+    if (ABP.live) return 0;
     const c = state.credits;
     const interval = (state.settings.refillHours || 6) * HOUR;
     const now = Date.now();
@@ -449,6 +451,7 @@
   };
 
   ABP.creditInfo = function () {
+    if (ABP.live && ABP.api && ABP.api.credits) return ABP.api.credits;
     ABP.refill();
     const c = state.credits;
     const max = state.settings.maxCredits;
@@ -459,6 +462,7 @@
   };
 
   ABP.consumeCredit = function (n) {
+    if (ABP.live) return true;
     const amount = n == null ? 1 : n;
     const c = state.credits;
     if (!state.settings.creditsEnabled) return true;
@@ -471,6 +475,7 @@
   };
 
   ABP.addCredit = function (n) {
+    if (ABP.live) return ABP.creditInfo().remaining;
     const c = state.credits;
     c.remaining = Math.max(0, c.remaining + Math.trunc(n));
     ABP.save();
@@ -478,6 +483,7 @@
   };
 
   ABP.audit = function (action, detail, level, actor) {
+    if (ABP.live) return;
     state.audit.unshift({
       id: U.uid('a'),
       at: Date.now(),
@@ -519,6 +525,7 @@
       return session;
     },
     session() {
+      if (ABP.live && ABP.api) return ABP.api.session || null;
       const s = state.session;
       if (!s) return null;
       if (!s.expiresAt || s.expiresAt < Date.now()) {
@@ -529,6 +536,13 @@
       return s;
     },
     logout() {
+      if (ABP.live && ABP.api) {
+        ABP.api.session = null;
+        state.session = null;
+        ABP.save();
+        ABP.api.adminLogout().catch(() => {});
+        return;
+      }
       if (state.session) ABP.audit('Logout panel admin', state.session.user, 'info', state.session.user);
       state.session = null;
       ABP.save();
@@ -654,6 +668,7 @@
      * dan biarkan UI memakai objek job dengan bentuk yang sama.
      */
     run(payload) {
+      if (ABP.live && ABP.api) return ABP.api.runJob(payload);
       const type = payload.type || 'bypass';
       const stages = this.stages(type);
       const job = {
@@ -770,6 +785,11 @@
     },
 
     cancel(jobId) {
+      if (ABP.live && ABP.api) {
+        this.running.delete(jobId);
+        ABP.api.cancelJob(jobId).catch(() => {});
+        return;
+      }
       const timer = this.running.get(jobId);
       if (timer) clearInterval(timer);
       this.running.delete(jobId);

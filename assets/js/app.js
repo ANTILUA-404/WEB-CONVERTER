@@ -285,7 +285,7 @@
       '<div class="stat-grid">' +
       [
         { k: 'Job diproses', v: stats.done + stats.queueActive, d: 'total sesi ini', spark: 's1', color: '#ff2f63' },
-        { k: 'Success rate', v: stats.successRate + '%', d: '30 hari terakhir', spark: 's2', color: '#3ddc97' },
+        { k: 'Success rate', v: stats.total ? stats.successRate + '%' : '—', d: stats.total ? '30 hari terakhir' : 'belum ada job', spark: 's2', color: '#3ddc97' },
         { k: 'Rata-rata proses', v: '8.4s', d: 'queue → upload', spark: 's3', color: '#4fd1ff' },
         { k: 'Kredit tersisa', v: info.remaining + '/' + info.max, d: info.bonus ? '+' + info.bonus + ' bonus overflow' : 'recovery +1 / ' + ABP.state.settings.refillHours + ' jam', spark: 's4', color: '#e8c77d' },
       ]
@@ -381,7 +381,7 @@
       '<div><span>Ukuran est.</span><b>' + U.bytes(estSize) + '</b></div>' +
       '</div>' +
       '<button class="btn btn-primary btn-block btn-lg" data-action="run-bypass">' + icon('bolt', 18) + ' Proses sekarang <span class="btn-cost">1 kredit</span></button>' +
-      '<p class="preview-note">' + icon('info', 13) + ' Demo engine — hasil & file disimulasikan di browser.</p>' +
+      '<p class="preview-note">' + icon('info', 13) + (ABP.live ? ' Engine aktif — file asli diproses yt-dlp + ffmpeg.' : ' Demo engine — hasil & file disimulasikan di browser.') + '</p>' +
       '</div>'
     );
   }
@@ -497,7 +497,7 @@
         kicker: 'STUDIO · AUDIO BYPASS',
         title: 'Studio Bypass',
         desc: 'Convert audio apa pun ke format Roblox-ready, lalu salin nilai <b>Sound.PlaybackSpeed</b> yang presisi sampai 4 desimal.',
-        aside: '<div class="head-badges">' + ui.badge('RUBBERBAND', 'gold') + ui.badge('44.1 kHz', 'muted') + ui.badge('DEMO ENGINE', 'accent') + '</div>',
+        aside: '<div class="head-badges">' + ui.badge('RUBBERBAND', 'gold') + ui.badge('44.1 kHz', 'muted') + (ABP.live ? ui.badge('LIVE ENGINE', 'success', true) : ui.badge('DEMO ENGINE', 'accent')) + '</div>',
       }) +
       '<div class="layout-2">' + left + '<aside class="sticky-col">' + (job && job.status === 'done' ? bypassResult(job) : bypassPreview()) + '</aside></div>' +
       infoStrip([
@@ -625,7 +625,7 @@
       '</div>' +
       '<div class="preview-facts"><div><span>Speed</span><b>1.0×</b></div><div><span>Pitch</span><b>1.0×</b></div><div><span>Gain</span><b>0 dB</b></div><div><span>Kodek</span><b>' + (ABP.FORMATS[getState.format] || ABP.FORMATS.mp3).label + '</b></div></div>' +
       '<button class="btn btn-primary btn-block btn-lg" data-action="run-get">' + icon('download', 18) + ' Download master <span class="btn-cost">1 kredit</span></button>' +
-      '<p class="preview-note">' + icon('info', 13) + ' Demo engine — file disimulasikan.</p>' +
+      '<p class="preview-note">' + icon('info', 13) + (ABP.live ? ' Engine aktif — file asli akan diproses.' : ' Demo engine — file disimulasikan.') + '</p>' +
       '</div></aside>' +
       '</div>' +
       infoStrip([
@@ -683,7 +683,7 @@
       '<div class="preview-facts"><div><span>Resolusi</span><b>' + videoState.quality + '</b></div><div><span>Container</span><b>MP4</b></div>' +
       '<div><span>Audio</span><b>AAC 128k</b></div><div><span>Faststart</span><b>ON</b></div></div>' +
       '<button class="btn btn-primary btn-block btn-lg" data-action="run-video">' + icon('download', 18) + ' Download MP4 <span class="btn-cost">1 kredit</span></button>' +
-      '<p class="preview-note">' + icon('info', 13) + ' Demo engine — file disimulasikan.</p>' +
+      '<p class="preview-note">' + icon('info', 13) + (ABP.live ? ' Engine aktif — file asli akan diproses.' : ' Demo engine — file disimulasikan.') + '</p>' +
       '</div></aside>' +
       '</div>' +
       infoStrip([
@@ -738,19 +738,21 @@
       '<p class="field-hint">Coba <code class="code">VIP2026</code>, <code class="code">ABV2-FREE-10</code>, atau <code class="code">ANTILUA-GOLD</code>.</p>' +
       '<div class="divider"></div>' +
       '<p class="kicker">KODE AKTIF</p>' +
-      '<div class="code-list">' +
-      ABP.state.codes.filter((c) => c.active).slice(0, 4).map((c) => {
-        const left = c.maxClaims === 0 ? '∞' : Math.max(0, c.maxClaims - c.claimCount) + ' sisa';
-        return '<div class="code-row"><div><b class="mono">' + esc(c.code) + '</b><small>+' + c.reward + ' kredit · ' + left + '</small></div>' +
-          '<button class="copy-btn" data-action="fill-redeem" data-code="' + esc(c.code) + '">' + icon('copy', 14) + '</button></div>';
-      }).join('') +
-      '</div>' +
+      (ABP.live
+        ? '<p class="field-hint">Kode dibagikan owner lewat Discord. Masukkan kode terbaru di kolom atas — kuota dan masa berlaku dicek langsung oleh server.</p>'
+        : '<div class="code-list">' +
+          ABP.state.codes.filter((c) => c.active).slice(0, 4).map((c) => {
+            const left = c.maxClaims === 0 ? '∞' : Math.max(0, c.maxClaims - c.claimCount) + ' sisa';
+            return '<div class="code-row"><div><b class="mono">' + esc(c.code) + '</b><small>+' + c.reward + ' kredit · ' + left + '</small></div>' +
+              '<button class="copy-btn" data-action="fill-redeem" data-code="' + esc(c.code) + '">' + icon('copy', 14) + '</button></div>';
+          }).join('') +
+          '</div>') +
       '</div></section>' +
       '</div>' +
 
       '<div class="tier-grid">' +
       '<div class="tier-card"><span class="tier-tag">FREE</span><h3>Rp 0</h3><p>Untuk coba engine.</p><ul>' +
-      ['25 kredit · +1 / ' + ABP.state.settings.refillHours + ' jam', 'Semua format audio', 'Cooldown 30 detik', 'Antrean standar'].map((x) => '<li>' + icon('check', 14) + x + '</li>').join('') + '</ul></div>' +
+      [ABP.state.settings.maxCredits + ' kredit · +1 / ' + ABP.state.settings.refillHours + ' jam', 'Semua format audio', 'Cooldown ' + (ABP.state.settings.cooldownSec || 0) + ' detik', 'Antrean standar'].map((x) => '<li>' + icon('check', 14) + x + '</li>').join('') + '</ul></div>' +
       '<div class="tier-card is-hot"><span class="tier-tag">PREMIUM</span><h3>Unlimited</h3><p>Untuk creator serius.</p><ul>' +
       ['Tanpa cooldown & tanpa kredit', 'Antrean prioritas', 'Bulk spoof 50 item', 'Akses semua preset'].map((x) => '<li>' + icon('check', 14) + x + '</li>').join('') + '</ul>' +
       '<a class="btn btn-primary btn-block" href="#/admin">Hubungi owner</a></div>' +
@@ -907,6 +909,7 @@
       const setFile = (f) => {
         if (!f) return;
         bypassState.file = { name: f.name, size: f.size };
+        bypassState.fileObj = f;
         const chip = document.getElementById('file-chip');
         chip.hidden = false;
         chip.innerHTML = icon('music', 16) + '<b>' + esc(f.name) + '</b><small>' + U.bytes(f.size) + '</small><button data-action="clear-file">' + icon('x', 13) + '</button>';
@@ -1133,7 +1136,24 @@
   }
 
   /* ------------------------------------------------------------------ redeem */
-  function redeem(rawCode) {
+  async function redeem(rawCode) {
+    if (ABP.live) {
+      const code = String(rawCode || '').trim().toUpperCase();
+      if (!code) {
+        ui.toast({ title: 'Masukkan kode dulu', tone: 'warn' });
+        return;
+      }
+      try {
+        const res = await ABP.api.redeem(code);
+        await ABP.api.refreshMe();
+        ui.toast({ title: '+' + res.reward + ' kredit masuk', msg: 'Kode ' + res.code + ' berhasil diklaim.', tone: 'success', icon: 'gift', duration: 5000 });
+        app.render();
+        app.refreshChrome();
+      } catch (err) {
+        ui.toast({ title: 'Redeem gagal', msg: err.message, tone: 'danger', icon: 'alert' });
+      }
+      return;
+    }
     const code = String(rawCode || '').trim().toUpperCase();
     if (!code) {
       ui.toast({ title: 'Masukkan kode dulu', tone: 'warn' });
@@ -1196,7 +1216,7 @@
     return true;
   }
 
-  function runBypass() {
+  async function runBypass() {
     if (!guard()) return;
     if (!bypassState.url && !bypassState.file) {
       ui.toast({ title: 'Sumber belum diisi', msg: 'Tempel link atau upload file audio dulu.', tone: 'warn' });
@@ -1205,64 +1225,102 @@
       return;
     }
     const src = bypassState.file ? bypassState.file.name : bypassState.url;
-    const job = ABP.engine.run({
-      type: 'bypass',
-      title: 'Menganalisis sumber…',
-      source: src,
-      format: bypassState.format,
-      speed: bypassState.speed,
-      pitch: bypassState.pitch,
-      gain: bypassState.gain,
-      preset: bypassState.preset,
-    });
+    setBusy(document.querySelector('[data-action="run-bypass"]'), 'Memproses…');
+    let job;
+    try {
+      job = await ABP.engine.run({
+        type: 'bypass',
+        title: 'Menganalisis sumber…',
+        source: src,
+        file: bypassState.fileObj || null,
+        format: bypassState.format,
+        speed: bypassState.speed,
+        pitch: bypassState.pitch,
+        gain: bypassState.gain,
+        preset: bypassState.preset,
+        normalize: bypassState.normalize,
+        silence: bypassState.silence,
+        trimStart: bypassState.trimStart,
+        trimEnd: bypassState.trimEnd,
+        customName: bypassState.name,
+      });
+    } catch (err) {
+      clearBusy();
+      ui.toast({ title: 'Gagal membuat job', msg: err.message, tone: 'danger', icon: 'alert' });
+      return;
+    }
     bypassState.jobId = job.id;
     lastCompleted = null;
-    setBusy(document.querySelector('[data-action="run-bypass"]'), 'Memproses…');
     ui.toast({ title: 'Job masuk antrean', msg: 'Engine mulai memproses ' + (bypassState.file ? bypassState.file.name : 'link') + '.', tone: 'default', icon: 'bolt' });
     app.renderDock();
   }
 
-  function runSpoof() {
+  async function runSpoof() {
     if (!guard()) return;
     if (!spoofState.batch.length) {
       ui.toast({ title: 'Batch kosong', msg: 'Tambah minimal satu asset ID.', tone: 'warn' });
       return;
     }
-    const job = ABP.engine.run({
-      type: 'spoof',
-      title: 'Asset #' + spoofState.batch[0].replace(/\D/g, '').slice(0, 12),
-      source: spoofState.batch.join(', '),
-      format: spoofState.format === 'audio' ? 'ogg' : 'rbxm',
-      placeId: spoofState.place,
-      assetType: spoofState.format,
-    });
     setBusy(document.querySelector('[data-action="run-spoof"]'), 'Memproses…');
-    ui.toast({ title: 'Batch spoof berjalan', msg: spoofState.batch.length + ' asset dalam antrean.', tone: 'default', icon: 'cube' });
+    try {
+      await ABP.engine.run({
+        type: 'spoof',
+        title: 'Asset #' + spoofState.batch[0].replace(/\D/g, '').slice(0, 12),
+        source: ABP.live ? spoofState.batch[0] : spoofState.batch.join(', '),
+        format: spoofState.format === 'audio' ? 'ogg' : 'rbxm',
+        placeId: spoofState.place,
+        assetType: spoofState.format,
+      });
+    } catch (err) {
+      clearBusy();
+      ui.toast({ title: 'Spoof gagal dibuat', msg: err.message, tone: 'danger', icon: 'alert' });
+      return;
+    }
+    ui.toast({
+      title: 'Spoof berjalan',
+      msg: ABP.live && spoofState.batch.length > 1
+        ? 'Mode live memproses 1 asset per job — antrekan sisanya setelah ini.'
+        : spoofState.batch.length + ' asset dalam antrean.',
+      tone: 'default',
+      icon: 'cube',
+    });
     app.renderDock();
   }
 
-  function runGet() {
+  async function runGet() {
     if (!guard()) return;
     if (!getState.url) {
       ui.toast({ title: 'Link belum diisi', msg: 'Tempel link lagu yang mau ditarik.', tone: 'warn' });
       document.getElementById('get-url')?.focus();
       return;
     }
-    ABP.engine.run({ type: 'get', title: 'Menganalisis sumber…', source: getState.url, format: getState.format, speed: 1, gain: 0 });
     setBusy(document.querySelector('[data-action="run-get"]'), 'Menarik…');
+    try {
+      await ABP.engine.run({ type: 'get', title: 'Menganalisis sumber…', source: getState.url, format: getState.format, speed: 1, gain: 0 });
+    } catch (err) {
+      clearBusy();
+      ui.toast({ title: 'Gagal membuat job', msg: err.message, tone: 'danger', icon: 'alert' });
+      return;
+    }
     ui.toast({ title: 'Menarik master', msg: 'Kualitas ' + (ABP.FORMATS[getState.format] || {}).label + ' · 1.0× original.', tone: 'default', icon: 'disc' });
     app.renderDock();
   }
 
-  function runVideo() {
+  async function runVideo() {
     if (!guard()) return;
     if (!videoState.url) {
       ui.toast({ title: 'Link belum diisi', msg: 'Tempel link video dulu.', tone: 'warn' });
       document.getElementById('video-url')?.focus();
       return;
     }
-    ABP.engine.run({ type: 'video', title: 'Menganalisis sumber…', source: videoState.url, format: 'mp4', quality: videoState.quality, speed: 1 });
     setBusy(document.querySelector('[data-action="run-video"]'), 'Mengunduh…');
+    try {
+      await ABP.engine.run({ type: 'video', title: 'Menganalisis sumber…', source: videoState.url, format: 'mp4', quality: videoState.quality, speed: 1 });
+    } catch (err) {
+      clearBusy();
+      ui.toast({ title: 'Gagal membuat job', msg: err.message, tone: 'danger', icon: 'alert' });
+      return;
+    }
     ui.toast({ title: 'Mengunduh video ' + videoState.quality, msg: 'Clean stream, tanpa watermark.', tone: 'default', icon: 'film' });
     app.renderDock();
   }
@@ -1270,6 +1328,11 @@
   function demoDownload(jobId) {
     const job = ABP.state.jobs.find((j) => j.id === jobId);
     if (!job) return;
+    if (ABP.live && job.downloadUrl) {
+      ABP.api.download(job);
+      ui.toast({ title: 'Download dimulai', msg: job.fileName || 'File hasil proses.', tone: 'success', icon: 'download' });
+      return;
+    }
     const fmt = ABP.FORMATS[job.format] || { label: job.format, ext: job.format };
     ui.toast({
       title: 'Demo mode',
@@ -1481,7 +1544,7 @@
         (s ? '<div class="intel-row"><span>Session berakhir</span><b>' + U.dateTime(s.expiresAt) + '</b></div>' : '') +
         '</div>',
       footer:
-        '<button class="btn btn-ghost" data-action="reset-demo">' + icon('refresh', 15) + ' Reset data demo</button>' +
+        (!ABP.live ? '<button class="btn btn-ghost" data-action="reset-demo">' + icon('refresh', 15) + ' Reset data demo</button>' : '') +
         (s
           ? '<a class="btn btn-soft" href="#/admin" data-close>Panel admin</a><button class="btn btn-danger" data-action="logout">' + icon('logout', 15) + ' Logout</button>'
           : '<a class="btn btn-primary" href="#/admin" data-close>Login admin</a>'),
@@ -1516,7 +1579,24 @@
     route();
   };
 
-  app.boot = function () {
+  app.boot = async function () {
+    try {
+      ABP.live = await ABP.api.init();
+      if (ABP.live) await ABP.api.bootstrap();
+    } catch (err) {
+      console.warn('[api] bootstrap gagal, fallback demo:', err.message);
+      ABP.live = false;
+    }
+
+    if (ABP.live) {
+      const active = ABP.state.jobs.find((j) => j.status === 'running' || j.status === 'queued');
+      if (active) {
+        ABP.state.activeJobId = active.id;
+        ABP.engine.running.set(active.id, true);
+        ABP.api.pollJob(active.id);
+      }
+    }
+
     renderRail();
     renderTopbar();
     renderMobileNav();
@@ -1555,6 +1635,20 @@
     ABP.bus.on('job:cancel', () => {
       clearBusy();
       app.renderDock();
+    });
+    ABP.bus.on('job:failed', (job) => {
+      clearBusy();
+      app.renderDock();
+      app.refreshChrome();
+      const aborted = job && job.errorCode === 'ABORTED';
+      ui.toast({
+        title: aborted ? 'Job dibatalkan' : 'Job gagal',
+        msg: (job && job.error) || 'Engine menolak job ini.',
+        tone: aborted ? 'warn' : 'danger',
+        icon: aborted ? 'x' : 'alert',
+        duration: 5200,
+      });
+      if (currentRoute === '#/bypass') app.render();
     });
 
     document.addEventListener('keydown', (e) => {

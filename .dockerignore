@@ -1,0 +1,7 @@
+.git
+server/data
+server/.env
+server/bin
+node_modules
+.tmp-shots
+*.log

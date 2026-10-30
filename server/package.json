@@ -1,0 +1,14 @@
+{
+  "name": "antibypass-web-server",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Real backend for the ANTIBYPASS V2 web interface (yt-dlp + ffmpeg + Roblox assets)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

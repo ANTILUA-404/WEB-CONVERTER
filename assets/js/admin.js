@@ -8,6 +8,115 @@
   const ui = ABP.ui;
   const esc = U.esc;
 
+  async function afterAdmin() {
+    await ABP.api.refreshAdmin();
+    ABP.app.render();
+    ABP.app.refreshChrome();
+  }
+
+  async function liveAction(action, el) {
+    const S = ABP.state.settings;
+    const call = ABP.api.request;
+    try {
+      switch (action) {
+        case 'admin-maint': {
+          const enabling = !S.maintenance;
+          await call('/api/admin/maintenance', { method: 'POST', body: { enabled: enabling, reason: S.maintenanceReason } });
+          await afterAdmin();
+          ui.toast({ title: enabling ? 'Maintenance ON' : 'Maintenance OFF', msg: enabling ? 'Job publik diblokir sementara.' : 'Engine kembali terbuka.', tone: enabling ? 'warn' : 'success', icon: 'alert' });
+          return true;
+        }
+        case 'purge-cache': {
+          const r = await call('/api/admin/cache/purge', { method: 'POST' });
+          await afterAdmin();
+          ui.toast({ title: 'Cache dibersihkan', msg: r.removed + ' folder temp dihapus.', tone: 'success', icon: 'trash' });
+          return true;
+        }
+        case 'toggle-code': {
+          const c = ABP.state.codes.find((x) => x.code === el.dataset.code);
+          await call('/api/admin/codes/' + encodeURIComponent(el.dataset.code), { method: 'PATCH', body: { active: !(c && c.active) } });
+          await afterAdmin();
+          ui.toast({ title: el.dataset.code + ' ' + (c && c.active ? 'dinonaktifkan' : 'diaktifkan'), tone: 'success', icon: 'eye' });
+          return true;
+        }
+        case 'delete-code': {
+          const ok = await ui.confirm({ title: 'Hapus ' + el.dataset.code + '?', msg: 'Kode dihapus permanen dari server.', confirmLabel: 'Hapus kode', danger: true });
+          if (!ok) return true;
+          await call('/api/admin/codes/' + encodeURIComponent(el.dataset.code), { method: 'DELETE' });
+          await afterAdmin();
+          ui.toast({ title: 'Kode dihapus', msg: el.dataset.code, tone: 'success', icon: 'trash' });
+          return true;
+        }
+        case 'remove-blacklist': {
+          await call('/api/admin/blacklist/' + encodeURIComponent(el.dataset.id), { method: 'DELETE' });
+          await afterAdmin();
+          ui.toast({ title: 'Blacklist dicabut', msg: el.dataset.id, tone: 'success', icon: 'check' });
+          return true;
+        }
+        case 'reset-all-credits': {
+          if (!ABP.auth.isOwner()) {
+            ui.toast({ title: 'Khusus owner', tone: 'danger', icon: 'lock' });
+            return true;
+          }
+          const ok = await ui.confirm({ title: 'Reset semua kredit?', msg: 'Semua saldo user dikembalikan ke batas maksimal.', confirmLabel: 'Reset semua', danger: true });
+          if (!ok) return true;
+          await call('/api/admin/credits/reset', { method: 'POST' });
+          await afterAdmin();
+          ui.toast({ title: 'Semua kredit direset', tone: 'success', icon: 'refresh' });
+          return true;
+        }
+        case 'save-settings': {
+          const body = {};
+          document.querySelectorAll('[data-setting]').forEach((input) => {
+            body[input.dataset.setting] = input.type === 'number' ? Number(input.value) : input.value;
+          });
+          document.querySelectorAll('[data-setting-toggle]').forEach((toggle) => {
+            body[toggle.dataset.settingToggle] = toggle.classList.contains('is-on');
+          });
+          await call('/api/admin/settings', { method: 'PUT', body });
+          await afterAdmin();
+          ui.toast({ title: 'Setting tersimpan', msg: 'Langsung berlaku ke engine.', tone: 'success', icon: 'check' });
+          return true;
+        }
+        case 'reset-settings': {
+          if (!ABP.auth.isOwner()) {
+            ui.toast({ title: 'Khusus owner', tone: 'danger', icon: 'lock' });
+            return true;
+          }
+          const ok = await ui.confirm({ title: 'Reset semua setting?', msg: 'Semua override dikembalikan ke default.', confirmLabel: 'Reset setting', danger: true });
+          if (!ok) return true;
+          await call('/api/admin/settings/reset', { method: 'POST' });
+          await afterAdmin();
+          ui.toast({ title: 'Setting direset', tone: 'success', icon: 'refresh' });
+          return true;
+        }
+        case 'clear-audit': {
+          if (!ABP.auth.isOwner()) {
+            ui.toast({ title: 'Khusus owner', tone: 'danger', icon: 'lock' });
+            return true;
+          }
+          await call('/api/admin/audit', { method: 'DELETE' });
+          await afterAdmin();
+          ui.toast({ title: 'Audit log dibersihkan', tone: 'success', icon: 'trash' });
+          return true;
+        }
+        case 'admin-logout': {
+          await ABP.api.adminLogout();
+          ABP.adminReady = false;
+          ui.toast({ title: 'Logout', msg: 'Session panel ditutup.', tone: 'success', icon: 'logout' });
+          ABP.app.render();
+          ABP.app.refreshChrome();
+          return true;
+        }
+        default:
+          return false;
+      }
+    } catch (err) {
+      ui.toast({ title: 'Aksi gagal', msg: err.message, tone: 'danger', icon: 'alert' });
+      return true;
+    }
+  }
+
   const TABS = [
     { key: 'overview', label: 'Overview', icon: 'grid' },
     { key: 'queue', label: 'Queue & Engine', icon: 'activity' },
@@ -56,19 +165,42 @@
   function bindGate() {
     const form = document.getElementById('gate-form');
     if (!form) return;
-    form.addEventListener('submit', (e) => {
+    const showError = (msg) => {
+      const err = document.getElementById('gate-error');
+      err.hidden = false;
+      err.querySelector('span').textContent = msg;
+      const card = document.querySelector('.gate-card');
+      card.classList.remove('shake');
+      void card.offsetWidth;
+      card.classList.add('shake');
+    };
+
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const user = document.getElementById('gate-user').value;
       const pass = document.getElementById('gate-pass').value;
+
+      if (ABP.live) {
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+        try {
+          const session = await ABP.api.adminLogin(user, pass);
+          await ABP.api.refreshAdmin();
+          ABP.adminReady = true;
+          ui.toast({ title: 'Selamat datang, ' + session.name, msg: 'Role: ' + (session.role === 'owner' ? 'Owner' : 'Admin') + ' · session 2 jam.', tone: 'success', icon: 'shield' });
+          ABP.app.render();
+          ABP.app.refreshChrome();
+        } catch (err) {
+          showError(err.message || 'Kredensial salah.');
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+        return;
+      }
+
       const session = ABP.auth.login(user, pass);
       if (!session) {
-        const err = document.getElementById('gate-error');
-        err.hidden = false;
-        err.querySelector('span').textContent = 'Kredensial salah. Coba akun demo di bawah.';
-        const card = document.querySelector('.gate-card');
-        card.classList.remove('shake');
-        void card.offsetWidth;
-        card.classList.add('shake');
+        showError('Kredensial salah. Coba akun demo di bawah.');
         return;
       }
       ui.toast({ title: 'Selamat datang, ' + session.name, msg: 'Role: ' + (session.role === 'owner' ? 'Owner' : 'Admin') + ' · session 2 jam.', tone: 'success', icon: 'shield' });
@@ -117,7 +249,8 @@
   }
 
   function tabOverview(session) {
-    const stats = ABP.stats();
+    const stats = ABP.live && ABP.state.adminStats ? ABP.state.adminStats : ABP.stats();
+    const queueRunning = ABP.live && ABP.state.engineInfo ? ABP.state.engineInfo.queue.running : ABP.engine.running.size;
     const info = ABP.creditInfo();
     const codes = ABP.state.codes;
     const activeCodes = codes.filter((c) => c.active).length;
@@ -127,8 +260,8 @@
       '<div class="admin-kpis">' +
       kpi('Job hari ini', stats.total, '+12% vs kemarin', 'var(--accent)') +
       kpi('Success rate', stats.successRate + '%', 'target ≥ 98%', 'var(--green)') +
-      kpi('Queue aktif', ABP.engine.running.size + ' / 4', 'concurrency worker', 'var(--cyan)') +
-      kpi('Kredit beredar', info.remaining + ' / ' + info.max, info.bonus ? '+' + info.bonus + ' overflow' : 'free tier', 'var(--gold)') +
+      kpi('Queue aktif', queueRunning + ' / 4', 'concurrency worker', 'var(--cyan)') +
+      kpi('Kredit beredar', stats.creditsCirculating != null ? stats.creditsCirculating : info.remaining, stats.users + ' akun terdaftar', 'var(--gold)') +
       '</div>' +
 
       '<div class="admin-grid-2">' +
@@ -183,8 +316,9 @@
   }
 
   function tabQueue() {
-    const running = ABP.state.jobs.filter((j) => j.status === 'running');
-    const recent = ABP.state.jobs.slice(0, 8);
+    const source = ABP.live ? ABP.state.adminJobs || [] : ABP.state.jobs;
+    const running = source.filter((j) => j.status === 'running' || j.status === 'queued');
+    const recent = source.slice(0, 8);
     return (
       '<section class="panel"><div class="panel-head"><div><p class="kicker">LIVE</p><h3>Worker & antrean</h3></div>' + ui.badge(running.length + ' AKTIF', 'accent', true) + '</div>' +
       '<div class="panel-body">' +
@@ -366,7 +500,7 @@
     });
     const activeBtn = document.getElementById('m-active');
     if (activeBtn) activeBtn.addEventListener('click', () => activeBtn.classList.toggle('is-on'));
-    document.getElementById('m-save').addEventListener('click', () => {
+    document.getElementById('m-save').addEventListener('click', async () => {
       const reward = Math.max(1, Math.floor(Number(document.getElementById('m-reward').value) || 1));
       const maxClaims = Math.max(0, Math.floor(Number(document.getElementById('m-max').value) || 0));
       const days = Math.max(0, Math.floor(Number(document.getElementById('m-days').value) || 0));
@@ -375,6 +509,25 @@
       if (!code || code === 'AUTO') code = 'ABV2-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
       if (!/^[A-Z0-9-]{4,24}$/.test(code)) {
         ui.toast({ title: 'Kode tidak valid', msg: 'Gunakan 4–24 karakter huruf, angka, atau tanda hubung.', tone: 'danger' });
+        return;
+      }
+      if (ABP.live) {
+        try {
+          if (isEdit) {
+            await ABP.api.request('/api/admin/codes/' + encodeURIComponent(existing.code), {
+              method: 'PATCH',
+              body: { reward, maxClaims, note, days, active: activeBtn ? activeBtn.classList.contains('is-on') : existing.active },
+            });
+          } else {
+            await ABP.api.request('/api/admin/codes', { method: 'POST', body: { code, reward, maxClaims, note, days } });
+          }
+          document.querySelectorAll('.modal-backdrop').forEach((m) => m.remove());
+          document.body.classList.remove('is-locked');
+          await afterAdmin();
+          ui.toast({ title: isEdit ? 'Kode diperbarui' : 'Kode dibuat', msg: code + ' · +' + reward + ' kredit', tone: 'success', icon: 'gift' });
+        } catch (err) {
+          ui.toast({ title: 'Gagal menyimpan', msg: err.message, tone: 'danger', icon: 'alert' });
+        }
         return;
       }
       const expiresAt = days > 0 ? Date.now() + days * 86400000 : null;
@@ -409,10 +562,23 @@
         '<label class="field-label">Durasi (hari, 0 = permanen)</label><input class="input" id="b-days" type="number" min="0" value="0" />',
       footer: '<button class="btn btn-ghost" data-close>Batal</button><button class="btn btn-danger" id="b-save">Blokir global</button>',
     });
-    document.getElementById('b-save').addEventListener('click', () => {
-      const id = document.getElementById('b-id').value.replace(/\D/g, '');
+    document.getElementById('b-save').addEventListener('click', async () => {
+      const raw = document.getElementById('b-id').value.trim();
+      const id = /^u_[a-f0-9]+$/.test(raw) ? raw : raw.replace(/\D/g, '');
       const reason = document.getElementById('b-reason').value.trim() || 'Melanggar ketentuan penggunaan.';
       const days = Math.max(0, Math.floor(Number(document.getElementById('b-days').value) || 0));
+      if (ABP.live) {
+        try {
+          await ABP.api.request('/api/admin/blacklist', { method: 'POST', body: { id, reason, days } });
+          document.querySelectorAll('.modal-backdrop').forEach((m) => m.remove());
+          document.body.classList.remove('is-locked');
+          await afterAdmin();
+          ui.toast({ title: 'User diblokir global', msg: id, tone: 'success', icon: 'ban' });
+        } catch (err) {
+          ui.toast({ title: 'Gagal memblokir', msg: err.message, tone: 'danger', icon: 'alert' });
+        }
+        return;
+      }
       if (!/^\d{15,22}$/.test(id)) {
         ui.toast({ title: 'User ID tidak valid', msg: 'Masukkan 15–22 digit angka.', tone: 'danger' });
         return;
@@ -444,8 +610,20 @@
         '<input class="input" id="c-amount" type="number" min="0" value="' + (mode === 'set' ? user.credits : 5) + '" />',
       footer: '<button class="btn btn-ghost" data-close>Batal</button><button class="btn btn-primary" id="c-save">Simpan</button>',
     });
-    document.getElementById('c-save').addEventListener('click', () => {
+    document.getElementById('c-save').addEventListener('click', async () => {
       const n = Math.max(0, Math.floor(Number(document.getElementById('c-amount').value) || 0));
+      if (ABP.live) {
+        try {
+          await ABP.api.request('/api/admin/users/' + encodeURIComponent(user.id) + '/credits', { method: 'POST', body: { action: mode === 'set' ? 'set' : 'add', amount: n } });
+          document.querySelectorAll('.modal-backdrop').forEach((m) => m.remove());
+          document.body.classList.remove('is-locked');
+          await afterAdmin();
+          ui.toast({ title: 'Saldo diperbarui', msg: user.name, tone: 'success', icon: 'wallet' });
+        } catch (err) {
+          ui.toast({ title: 'Gagal memperbarui', msg: err.message, tone: 'danger', icon: 'alert' });
+        }
+        return;
+      }
       user.credits = mode === 'set' ? n : user.credits + n;
       ABP.audit(mode === 'set' ? 'Saldo kredit di-set' : 'Kredit ditambahkan', user.name + ' → ' + user.credits, 'success');
       ABP.save();
@@ -457,7 +635,11 @@
   }
 
   /* ----------------------------------------------------------------- actions */
-  function handleAction(action, el) {
+  async function handleAction(action, el) {
+    if (ABP.live) {
+      const handled = await liveAction(action, el);
+      if (handled) return;
+    }
     switch (action) {
       case 'toggle-pass': {
         const p = document.getElementById('gate-pass');
@@ -663,6 +845,13 @@
       bindGate();
       document.title = 'Restricted · ANTIBYPASS V2';
       return;
+    }
+    if (ABP.live && !ABP.adminReady) {
+      ABP.adminReady = true;
+      ABP.api
+        .refreshAdmin()
+        .then(() => ABP.app.render())
+        .catch((err) => ui.toast({ title: 'Gagal memuat data admin', msg: err.message, tone: 'danger', icon: 'alert' }));
     }
     ABP.adminTab = ABP.adminTab || 'overview';
     const tab = TABS.some((t) => t.key === ABP.adminTab) ? ABP.adminTab : 'overview';

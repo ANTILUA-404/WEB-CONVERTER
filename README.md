@@ -1,64 +1,107 @@
-# ANTIBYPASS V2 — Web Interface
+# WEB-CONVERTER — ANTIBYPASS V2 Web Engine
 
-Versi web dari bot Discord **ANTIBYPASS V2** (powered by ANTILUA).
-Tampilan mengikuti pola aplikasi musik modern (sidebar, search, shelf, player dock),
-dengan identitas sendiri: gelap, crimson → ember → gold, dan tipografi teknis.
+Versi web dari bot **ANTIBYPASS V2** (powered by ANTILUA). Tampilan mengikuti pola
+aplikasi musik modern, dan sekarang **benar-benar memproses file**: yt-dlp menarik
+sumber, ffmpeg (rubberband) mengonversi, hasilnya bisa diunduh.
 
-> **Status:** ini adalah *front-end design + demo engine*. Semua proses (download,
-> konversi, spoof) disimulasikan di browser supaya alur UI bisa dicoba tanpa server.
-> Bagian "Menghubungkan engine asli" di bawah menjelaskan titik sambungnya.
+Ada dua mode:
+
+| Mode | Kapan aktif | Yang terjadi |
+|---|---|---|
+| **Live** | Dibuka lewat `node server/server.js` | Job asli: download → convert → file nyata |
+| **Demo** | File statis / GitHub Pages (tanpa backend) | Semua disimulasikan di browser |
+
+UI otomatis mendeteksi `/api/health`. Kalau backend tidak ada, ia jatuh ke mode demo
+dengan badge `DEMO ENGINE`; kalau ada, badge berubah jadi `LIVE ENGINE`.
 
 ---
 
-## Menjalankan
+## Quick start (lokal)
 
-Buka `index.html` langsung di browser, atau jalankan static server:
+Butuh **Node.js 20+**, **ffmpeg** (disarankan build dengan `librubberband`), dan **yt-dlp**.
 
 ```bash
 git clone https://github.com/ANTILUA-404/WEB-CONVERTER.git
 cd WEB-CONVERTER
-python -m http.server 8777
-# http://127.0.0.1:8777
+cp server/.env.example server/.env
+# isi FFMPEG_PATH / YTDLP_PATH kalau binary tidak ada di PATH
+node server/server.js
+# http://127.0.0.1:8787
 ```
 
-Tidak ada build step, tidak ada dependency. Font diambil dari Google Fonts
-(ada fallback system font kalau offline).
+Windows, memakai binary dari folder bot:
+
+```ini
+# server/.env
+FFMPEG_PATH=D:\BOT MUSIC CONVERTER\ANTIBYPASS_V2-main\bin\ffmpeg.exe
+YTDLP_PATH=D:\BOT MUSIC CONVERTER\ANTIBYPASS_V2-main\bin\yt-dlp.exe
+```
+
+Binary juga bisa ditaruh di `server/bin/` (otomatis terdeteksi), atau dibiarkan
+kosong kalau `ffmpeg`/`yt-dlp` sudah ada di `PATH`.
+
+Cek kesiapan:
+
+```bash
+curl http://127.0.0.1:8787/api/health
+# { ok: true, binaries: { ffmpeg, ytdlp, rubberband: true } }
+```
 
 ---
 
-## Halaman
+## Docker
 
-| Route | Isi |
-|---|---|
-| `#/home` | Hero, statistik, toolkit, shelf job terakhir, preset suara, akses |
-| `#/bypass` | Studio Bypass — link/upload, 8 format, speed/pitch/gain, preset, trim, preview `PlaybackSpeed` live |
-| `#/spoof` | Asset Spoofer — batch asset ID, output auto/audio/rbxm, place context, pipeline |
-| `#/get` | Fresh Master — matriks format (MP3 320 / FLAC / WAV / M4A), 1.0× original |
-| `#/video` | Clean Video — ladder 2160p → 360p, trim, platform support |
-| `#/credits` | Ring kuota, recovery countdown, bonus overflow, redeem, tier, ledger |
-| `#/history` | Filter + search + tabel job, copy PlaybackSpeed, re-run |
-| `#/admin` | Control Center — terkunci, butuh login owner/admin |
+```bash
+docker build -t antibypass-web .
+docker run -p 8080:8080 -v antibypass-data:/data \
+  -e OWNER_PASS=ganti-ini -e ADMIN_PASS=ganti-ini \
+  antibypass-web
+```
 
-Shortcut: `/` fokus ke search, `Ctrl/Cmd + K` command palette.
+Image sudah memasang ffmpeg + yt-dlp. Data (job, kredit, kode) tersimpan di volume `/data`.
 
 ---
 
-## Admin / Owner
+## Yang benar-benar jalan
 
-Gate `#/admin` hanya render panel kalau ada session valid (2 jam, disimpan di
-`localStorage`). Role menentukan akses:
+| Fitur | Status | Catatan |
+|---|---|---|
+| **Bypass** | ✅ | yt-dlp → ffmpeg `rubberband`; 8 format, speed/pitch/gain, preset, trim, loudnorm, buang silence |
+| **PlaybackSpeed** | ✅ | `1 / speed`, dipotong 4 desimal (2.3× → `0.4347`) |
+| **Fresh Master** | ✅ | 1.0×, bitrate maksimum (MP3 320 / FLAC / WAV / M4A) |
+| **Clean Video** | ✅ | `bv+ba` sampai 2160p, remux `-c copy` + faststart, fallback re-encode 720p |
+| **Upload file** | ✅ | Multipart ke `server/data/uploads`, langsung diproses |
+| **Spoof Roblox** | ✅ terbatas | Asset publik via `assetdelivery` v2; audio di-re-encode, RBXM di-scrub (`SourceAssetId = -1`) |
+| **Kredit** | ✅ | 1 kredit dipotong saat job dibuat, **refund otomatis kalau gagal**; recovery +1 / 6 jam; overflow redeem |
+| **Redeem** | ✅ | Validasi kode, kuota, expiry, sekali per user |
+| **Admin** | ✅ | Login server-side, CRUD kode, blacklist, saldo user, setting engine, maintenance, audit |
+| **History & download** | ✅ | File nyata di `GET /api/jobs/:id/file` |
+| **Laporan .txt** | ✅ | Berisi format, bitrate, checksum, PlaybackSpeed |
 
-| Akun | Password | Role | Akses |
-|---|---|---|---|
-| `owner` | `antibypass` | Owner | Semua tab, Roblox cookie/API key, reset setting, reset semua kredit |
-| `admin` | `admin123` | Admin | Overview, queue, redeem, blacklist, credit users, audit. Tab **Settings** terkunci |
+### Batasan yang perlu diketahui
 
-Tab yang butuh owner ditandai ikon kunci dan tidak bisa dibuka oleh role admin.
-Aksi penting masuk ke audit log.
+- **Spoof bukan deep-spoof penuh.** Yang dikerjakan: unduh asset asli, lalu tulis ulang
+  `SourceAssetId` jadi `-1` (binary PROP `0x1b` / XML `<int64>`) dan `UniqueId` XML.
+  Bot punya mutasi chunk LZ4, unwrap animasi katalog, dan auto-publish ke Roblox —
+  bagian itu **belum** diporting ke web.
+- **Satu asset per job** untuk spoof di mode live (bukan batch).
+- **DRM** (Netflix/Spotify premium dsb.) tidak didukung.
+- YouTube kadang minta PO token / cookies; isi `YTDLP_COOKIES` kalau kena.
+- Job berat (lagu 1 jam) bisa memakan beberapa menit karena rubberband CPU-bound.
 
-**Penting:** autentikasi ini berjalan di sisi klien dan hanya untuk demo UI.
-Untuk produksi, pindahkan verifikasi ke server (session cookie/JWT), dan jangan
-kirim kredensial role ke bundle publik seperti ini.
+---
+
+## Admin
+
+Kredensial dari `server/.env` (default di bawah, **ganti untuk produksi**):
+
+| Akun | Password | Role |
+|---|---|---|
+| `owner` | `antibypass` | Semua tab + setting owner-only |
+| `admin` | `admin123` | Semua kecuali tab Settings |
+
+Session disimpan di cookie `HttpOnly` dan divalidasi di server pada setiap request
+`/api/admin/*`. Role admin tidak bisa membuka setting owner-only meskipun memanggil API langsung.
 
 ---
 
@@ -67,76 +110,90 @@ kirim kredensial role ke bundle publik seperti ini.
 ```
 WEB-CONVERTER/
 ├─ index.html
-├─ README.md
-├─ LICENSE
-└─ assets/
-   ├─ css/style.css        # design system + seluruh layout
-   └─ js/
-      ├─ icons.js          # inline SVG icon set
-      ├─ core.js           # util, state, artwork generator, demo engine, auth
-      ├─ ui.js             # toast, modal, dock, report overlay, command palette
-      ├─ app.js            # shell, router, halaman publik
-      └─ admin.js          # gate + control center
+├─ Dockerfile
+├─ assets/
+│  ├─ css/style.css
+│  └─ js/
+│     ├─ icons.js        # icon set
+│     ├─ core.js         # state, artwork, demo engine
+│     ├─ api.js          # bridge ke backend + fallback demo
+│     ├─ ui.js           # toast, modal, dock, report
+│     ├─ app.js          # shell, router, halaman publik
+│     └─ admin.js        # gate + control center
+└─ server/
+   ├─ server.js          # HTTP + routing + static + SSE
+   ├─ lib/
+   │  ├─ env.js          # .env loader
+   │  ├─ store.js        # JSON store (users, jobs, codes, audit)
+   │  ├─ auth.js         # cookie user + admin session
+   │  ├─ queue.js        # concurrency queue
+   │  ├─ binaries.js     # deteksi ffmpeg / yt-dlp / rubberband
+   │  ├─ converter.js    # format matrix, preset, filter DSP
+   │  ├─ ytdlp.js        # resolve + download + progress
+   │  ├─ ffmpeg.js       # probe + convert + remux
+   │  ├─ roblox.js       # asset delivery + metadata scrub
+   │  └─ pipeline.js     # orkestrasi job
+   └─ data/              # state.json, files/, uploads/, tmp/ (gitignored)
 ```
 
-Live (kalau GitHub Pages diaktifkan): `https://antilua-404.github.io/WEB-CONVERTER/`
-
-State disimpan di `localStorage` key `antibypass.v2.state`. Reset lewat menu
-profil → **Reset data demo**.
-
 ---
 
-## Yang sudah berfungsi di demo
+## API
 
-- Job simulation dengan 6 stage, progress, log terminal, cancel, re-run
-- PlaybackSpeed dihitung `1 / speed` dan dipotong 4 desimal (0.4347 untuk 2.3×)
-- Kredit: konsumsi per job, recovery +1 / 6 jam, bonus overflow dari redeem
-- Redeem: validasi kode, kuota klaim, expiry, nonaktif
-- Admin: CRUD kode redeem, blacklist, saldo user, setting engine, maintenance
-- Maintenance mode memblokir job publik dan menampilkan banner
-- Report `.txt` benar-benar diunduh; file audio/video hanya disimulasikan
-- Responsive sampai 414px (bottom nav + dock ringkas)
+```
+GET  /api/health
+GET  /api/me
+POST /api/jobs                 { type, source|uploadId, format, speed, pitch, gain, preset, quality, ... }
+GET  /api/jobs
+GET  /api/jobs/:id
+GET  /api/jobs/:id/events      SSE progress
+POST /api/jobs/:id/cancel
+GET  /api/jobs/:id/file        download hasil
+POST /api/upload               multipart field "file"
+POST /api/redeem               { code }
 
----
+POST /api/auth/login           { username, password }
+POST /api/auth/logout
+GET  /api/auth/session
 
-## Menghubungkan engine asli
+GET  /api/admin/overview
+GET|POST /api/admin/codes      PATCH|DELETE /api/admin/codes/:code
+GET|POST /api/admin/blacklist  DELETE /api/admin/blacklist/:id
+GET  /api/admin/users          POST /api/admin/users/:id/credits
+GET|PUT /api/admin/settings    POST /api/admin/settings/reset
+POST /api/admin/maintenance
+POST /api/admin/credits/reset
+GET|DELETE /api/admin/audit
+POST /api/admin/cache/purge
+```
 
-Ganti `ABP.engine.run()` di `assets/js/core.js` dengan panggilan API. Bentuk job
-yang dipakai UI:
+Job shape yang dipakai UI sama dengan versi demo:
 
 ```js
 {
   id, type: 'bypass' | 'get' | 'video' | 'spoof',
-  title, source, format, speed, pitch, gain, preset,
-  status: 'running' | 'done' | 'failed',
-  progress: 0..100,
-  stage: 'queue' | 'resolve' | 'download' | 'probe' | 'convert' | 'upload' | 'done',
-  stageLabel, durationSec, outputDurationSec, sizeBytes, playbackSpeed, engine, log: []
+  title, source, format, speed, pitch, gain, preset, quality,
+  status: 'queued' | 'running' | 'done' | 'failed',
+  progress, stage, stageLabel, log: [{ t, line }],
+  durationSec, outputDurationSec, sizeBytes, playbackSpeed, engine,
+  fileName, downloadUrl, checksum, error
 }
 ```
 
-Endpoint yang disarankan:
+---
 
-```
-POST /api/jobs              -> { id }
-GET  /api/jobs/:id          -> job (poll 500–1000ms, atau SSE)
-POST /api/jobs/:id/cancel
-GET  /api/jobs/:id/file     -> file hasil
-GET  /api/me                -> { credits, max, bonus, nextRefillMs, tier }
-POST /api/redeem            -> { ok, reward }
-GET  /api/admin/...         -> semua aksi panel (wajib dicek role di server)
-```
+## Deploy
 
-Pipeline asli dari bot bisa dipakai apa adanya: `yt-dlp` → `ffmpeg` (rubberband)
-→ output, lalu simpan metadata laporan yang sama (`playbackSpeed`, bitrate,
-sample rate, checksum) supaya UI tidak perlu berubah.
+- **VPS / Railway / Render / Fly**: pakai Dockerfile di atas, mount volume ke `/data`.
+- **GitHub Pages**: hanya bisa mode demo (tidak ada Node/ffmpeg). UI tetap jalan,
+  tapi tombol proses hanya simulasi.
+
+Jangan taruh `server/.env` atau `server/data/` di repo — keduanya sudah masuk `.gitignore`,
+dan server memblokir `/server/*` dari static.
 
 ---
 
 ## Catatan
 
-- Nama, angka, dan konten job di demo adalah data contoh.
-- Desain ini tidak menampilkan atau membungkam merek pihak ketiga; branding
-  ANTIBYPASS dipakai eksplisit sesuai permintaan.
-- Gunakan tool ini hanya untuk konten yang kamu punya haknya dan patuhi ToS
-  platform masing-masing.
+- Gunakan hanya untuk konten yang kamu punya haknya dan patuhi ToS platform.
+- Nama, angka, dan job contoh di mode demo adalah data fiktif.
